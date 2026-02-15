@@ -36,11 +36,12 @@ BOT_TOKEN=123456:ABC-DEF...
 uv run python bot.py
 ```
 
-## Deploy (Nixpacks / Railway)
+## Deploy (Docker)
 
-The project includes `nixpacks.toml` — ffmpeg is installed automatically.
-
-Set the `BOT_TOKEN` environment variable in your service settings and deploy.
+```bash
+docker build -t tiktok-mp3-bot .
+docker run -e BOT_TOKEN=your_token tiktok-mp3-bot
+```
 
 ## Stack
 
