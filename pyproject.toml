@@ -1,0 +1,11 @@
+[project]
+name = "tiktok-mp3-tg-bot"
+version = "0.1.0"
+description = "Telegram bot to download MP3 from TikTok videos"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram>=3.25.0",
+    "python-dotenv>=1.2.1",
+    "yt-dlp>=2026.2.4",
+]
