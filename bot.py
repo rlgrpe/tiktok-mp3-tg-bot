@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -26,17 +27,9 @@ TIKTOK_URL_RE = re.compile(
 
 
 def download_mp3(url: str, output_dir: str) -> Path | None:
-    """Download TikTok audio as MP3 using yt-dlp. Returns path to the file."""
+    """Download TikTok audio as MP3 using yt-dlp + ffmpeg. Returns path to the file."""
     opts = {
         "format": "bestaudio/best",
-        "extract_audio": True,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }
-        ],
         "outtmpl": os.path.join(output_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
@@ -47,9 +40,26 @@ def download_mp3(url: str, output_dir: str) -> Path | None:
         if info is None:
             return None
         video_id = info.get("id", "audio")
-        mp3_path = Path(output_dir) / f"{video_id}.mp3"
-        if mp3_path.exists():
-            return mp3_path
+
+    # Find the downloaded file
+    downloaded_files = list(Path(output_dir).glob(f"{video_id}.*"))
+    if not downloaded_files:
+        return None
+
+    downloaded = downloaded_files[0]
+    mp3_path = Path(output_dir) / f"{video_id}.mp3"
+
+    if downloaded.suffix == ".mp3":
+        return downloaded
+
+    # Convert to mp3 with ffmpeg directly (bypasses ffprobe codec detection)
+    result = subprocess.run(
+        ["ffmpeg", "-i", str(downloaded), "-vn", "-acodec", "libmp3lame",
+         "-ab", "192k", "-y", str(mp3_path)],
+        capture_output=True,
+    )
+    if result.returncode == 0 and mp3_path.exists():
+        return mp3_path
     return None
 
 
