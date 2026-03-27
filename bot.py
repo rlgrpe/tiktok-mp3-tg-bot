@@ -206,7 +206,30 @@ def map_download_error(
     )
 
 
+def has_audio_stream(file_path: Path) -> bool:
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v", "quiet",
+            "-select_streams", "a",
+            "-show_entries", "stream=codec_type",
+            "-of", "csv=p=0",
+            str(file_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return bool(result.stdout.strip())
+
+
 def convert_to_mp3(downloaded: Path, mp3_path: Path) -> Path:
+    if not has_audio_stream(downloaded):
+        raise TikTokDownloadError(
+            error_type="no_audio",
+            user_message="В этом TikTok видео нет аудиодорожки.",
+            stage="convert",
+        )
+
     result = subprocess.run(
         [
             "ffmpeg",
@@ -236,7 +259,7 @@ def convert_to_mp3(downloaded: Path, mp3_path: Path) -> Path:
 
 def download_mp3(request: TikTokRequest, output_dir: str) -> Path:
     opts = {
-        "format": "bestaudio/best",
+        "format": "bestaudio*/best",
         "outtmpl": os.path.join(output_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
