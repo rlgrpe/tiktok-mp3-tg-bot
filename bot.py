@@ -219,7 +219,17 @@ def has_audio_stream(file_path: Path) -> bool:
         capture_output=True,
         text=True,
     )
-    return bool(result.stdout.strip())
+    has_audio = bool(result.stdout.strip())
+    if not has_audio:
+        file_size = file_path.stat().st_size if file_path.exists() else -1
+        logging.warning(
+            "no_audio_detected file=%s size=%d ffprobe_stdout=%r ffprobe_stderr=%r",
+            file_path.name,
+            file_size,
+            result.stdout,
+            result.stderr.strip() or "(empty)",
+        )
+    return has_audio
 
 
 def convert_to_mp3(downloaded: Path, mp3_path: Path) -> Path:
@@ -259,7 +269,7 @@ def convert_to_mp3(downloaded: Path, mp3_path: Path) -> Path:
 
 def download_mp3(request: TikTokRequest, output_dir: str) -> Path:
     opts = {
-        "format": "bestaudio*/best",
+        "format": "best[ext=mp4][vcodec=h264]/best",
         "outtmpl": os.path.join(output_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
@@ -274,6 +284,15 @@ def download_mp3(request: TikTokRequest, output_dir: str) -> Path:
         raise map_download_error(exc, request) from exc
     except Exception as exc:
         raise map_download_error(exc, request, stage="download") from exc
+
+    if info is not None:
+        logging.info(
+            "yt_dlp_download url=%s format_id=%s ext=%s format=%s",
+            request.download_url,
+            info.get("format_id"),
+            info.get("ext"),
+            info.get("format"),
+        )
 
     if info is None:
         raise TikTokDownloadError(
@@ -317,11 +336,6 @@ def download_mp3(request: TikTokRequest, output_dir: str) -> Path:
 
     mp3_path = Path(output_dir) / f"{video_id}.mp3"
     return convert_to_mp3(downloaded, mp3_path)
-
-
-def process_tiktok_request(url: str, output_dir: str) -> tuple[TikTokRequest, Path]:
-    request = normalize_tiktok_request(url)
-    return request, download_mp3(request, output_dir)
 
 
 def log_request_result(
@@ -380,10 +394,15 @@ async def handle_url(message: Message) -> None:
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             loop = asyncio.get_running_loop()
-            request, mp3_path = await loop.run_in_executor(
+            request = await loop.run_in_executor(
                 None,
-                process_tiktok_request,
+                normalize_tiktok_request,
                 url,
+            )
+            mp3_path = await loop.run_in_executor(
+                None,
+                download_mp3,
+                request,
                 tmpdir,
             )
 
